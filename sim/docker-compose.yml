@@ -1,0 +1,15 @@
+services:
+  sim:
+    build: .
+    container_name: embarcados-sim
+    ports:
+      - "5500:5500"   # gateway  (grupo B)
+      - "5501:5501"   # servidor (grupo C)
+    volumes:
+      - ./sd:/data    # "cartao SD" do servidor: ./sd/log.csv
+    environment:
+      NODE_IDS: "1,2,3"        # nos sensores simulados
+      RADIO_PERIOD_S: "0.5"    # periodo de transmissao do no
+      SERVER_POLL_S: "1.0"     # periodo com que o servidor consulta o gateway
+      RESET_DOWNTIME_S: "3"    # quanto tempo cada placa fica fora do ar apos /reset
+    restart: unless-stopped
