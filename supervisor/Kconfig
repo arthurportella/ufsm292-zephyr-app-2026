@@ -1,0 +1,41 @@
+menu "Supervisor (grupo D)"
+
+config SUPERVISOR_GATEWAY_ADDR
+	string "IPv4 do gateway"
+	default "192.168.0.10"
+
+config SUPERVISOR_GATEWAY_PORT
+	int "Porta HTTP do gateway"
+	default 5500
+	help
+	  5500 = simulador (pasta sim/). Na integração, a porta real do grupo B.
+
+config SUPERVISOR_SERVER_ADDR
+	string "IPv4 do servidor"
+	default "192.168.0.10"
+
+config SUPERVISOR_SERVER_PORT
+	int "Porta HTTP do servidor"
+	default 5501
+	help
+	  5501 = simulador (pasta sim/). Na integração, a porta real do grupo C.
+
+config SUPERVISOR_POLL_MS
+	int "Período de consulta (ms)"
+	default 2000
+
+config SUPERVISOR_TIMEOUT_MS
+	int "Timeout de cada requisição HTTP (ms)"
+	default 1500
+
+config SUPERVISOR_FAIL_THRESHOLD
+	int "N timeouts consecutivos para marcar falha"
+	default 3
+
+config SUPERVISOR_RESET_GRACE_MS
+	int "Tempo após POST /reset em que falhas não contam (ms)"
+	default 10000
+
+endmenu
+
+source "Kconfig.zephyr"

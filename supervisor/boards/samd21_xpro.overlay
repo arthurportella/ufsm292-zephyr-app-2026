@@ -1,0 +1,113 @@
+/*
+ * SAM D21 Xplained Pro + OLED1 Xplained Pro no conector EXT3.
+ *
+ * Pinos do OLED1 -> EXT3 da SAMD21 Xpro (conferir no user guide do OLED1):
+ *   3 BOTÃO 2  PA02        9 BOTÃO 1       PA28
+ *   4 BOTÃO 3  PA03       10 DISPLAY_RESET PA27
+ *   5 D/C      PB30       15 SPI SS        PB17
+ *   6 LED 3    PA15       16 SPI MOSI      PB22 (SERCOM5 PAD2)
+ *   7 LED 1    PA12       18 SPI SCK       PB23 (SERCOM5 PAD3)
+ *   8 LED 2    PA13
+ *
+ * No EXT3 o pino 5 (PB30) é o LED0 da placa e o pino 6 (PA15) é o SW0,
+ * por isso os dois são removidos abaixo. Se o OLED1 for para outro
+ * conector, só este arquivo muda.
+ */
+
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+
+/delete-node/ &led0;
+/delete-node/ &pwm_led0;
+/delete-node/ &user_button;
+
+/ {
+	aliases {
+		/delete-property/ led0;
+		/delete-property/ pwm-led0;
+		/delete-property/ sw0;
+	};
+
+	chosen {
+		zephyr,display = &oled1_display;
+	};
+
+	oled1_leds {
+		compatible = "gpio-leds";
+
+		led_gw: led_1 {
+			gpios = <&porta 12 GPIO_ACTIVE_LOW>;
+			label = "OLED1 LED1 - gateway em falha";
+		};
+
+		led_srv: led_2 {
+			gpios = <&porta 13 GPIO_ACTIVE_LOW>;
+			label = "OLED1 LED2 - servidor em falha";
+		};
+
+		led_hb: led_3 {
+			gpios = <&porta 15 GPIO_ACTIVE_LOW>;
+			label = "OLED1 LED3 - heartbeat";
+		};
+	};
+
+	oled1_buttons {
+		compatible = "gpio-keys";
+
+		button_1 {
+			gpios = <&porta 28 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			zephyr,code = <INPUT_KEY_1>;
+		};
+
+		button_2 {
+			gpios = <&porta 2 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			zephyr,code = <INPUT_KEY_2>;
+		};
+
+		button_3 {
+			gpios = <&porta 3 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			zephyr,code = <INPUT_KEY_3>;
+		};
+	};
+};
+
+/* PB30 era o PWM do LED0; agora é o D/C do display */
+&tcc0 {
+	status = "disabled";
+};
+
+&pinctrl {
+	sercom5_spi_ext3: sercom5_spi_ext3 {
+		group1 {
+			pinmux = <PB16C_SERCOM5_PAD0>,
+				 <PB22D_SERCOM5_PAD2>,
+				 <PB23D_SERCOM5_PAD3>;
+		};
+	};
+};
+
+&sercom5 {
+	status = "okay";
+	/* MISO = PAD0, MOSI = PAD2, SCK = PAD3 */
+	dipo = <0>;
+	dopo = <1>;
+	pinctrl-0 = <&sercom5_spi_ext3>;
+	cs-gpios = <&portb 17 GPIO_ACTIVE_LOW>;
+
+	oled1_display: ssd1306@0 {
+		compatible = "solomon,ssd1306";
+		reg = <0>;
+		spi-max-frequency = <4000000>;
+		data-cmd-gpios = <&portb 30 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&porta 27 GPIO_ACTIVE_LOW>;
+		width = <128>;
+		height = <32>;
+		segment-offset = <0>;
+		page-offset = <0>;
+		display-offset = <0>;
+		multiplex-ratio = <31>;
+		segment-remap;
+		com-invdir;
+		com-sequential;
+		prechargep = <0x22>;
+	};
+};

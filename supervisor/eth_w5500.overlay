@@ -1,0 +1,46 @@
+/*
+ * EXEMPLO de módulo Ethernet SPI no EXT1 da SAMD21 Xpro (ainda não sabemos
+ * qual módulo o laboratório tem). Usar com:
+ *
+ *   west build -b samd21_xpro supervisor -- -DEXTRA_DTC_OVERLAY_FILE=eth_w5500.overlay
+ *
+ * EXT1: 15 SS PA05 | 16 MOSI PA06 | 17 MISO PA04 | 18 SCK PA07 | 9 IRQ PB04 | 10 RESET PB05
+ *
+ * Para ENC28J60 (ex.: ETH Click): trocar o nó por compatible = "microchip,enc28j60"
+ * (mesmos reg/int-gpios/spi-max-frequency, ver dts/bindings/ethernet no Zephyr).
+ * O ETHERNET1 Xplained Pro (KSZ8851SNL) NÃO tem driver no Zephyr.
+ */
+
+&pinctrl {
+	sercom0_spi_ext1: sercom0_spi_ext1 {
+		group1 {
+			pinmux = <PA4D_SERCOM0_PAD0>,
+				 <PA6D_SERCOM0_PAD2>,
+				 <PA7D_SERCOM0_PAD3>;
+		};
+	};
+};
+
+/* Na placa o SERCOM0 vem como UART; aqui vira o SPI do EXT1 */
+&sercom0 {
+	compatible = "atmel,sam0-spi";
+	/delete-property/ current-speed;
+	/delete-property/ rxpo;
+	/delete-property/ txpo;
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	dipo = <0>;
+	dopo = <1>;
+	pinctrl-0 = <&sercom0_spi_ext1>;
+	cs-gpios = <&porta 5 GPIO_ACTIVE_LOW>;
+
+	eth: w5500@0 {
+		compatible = "wiznet,w5500";
+		reg = <0>;
+		spi-max-frequency = <8000000>;
+		int-gpios = <&portb 4 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&portb 5 GPIO_ACTIVE_LOW>;
+		local-mac-address = [02 00 00 00 00 0d];
+	};
+};
