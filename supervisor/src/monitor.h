@@ -26,6 +26,7 @@ struct monitor {
 	bool failed;       /* marcado em falha */
 	int fails;         /* falhas consecutivas */
 	int resets;        /* resets enviados */
+	int last_result;   /* retorno da última consulta: status HTTP ou -errno */
 	uint32_t uptime_ms;
 	int64_t hold_until;
 };

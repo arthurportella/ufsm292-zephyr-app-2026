@@ -76,11 +76,17 @@ static bool complete(const char *buf, size_t used)
 int http_request(const char *addr, uint16_t port, const char *method, const char *path,
 		 char *buf, size_t size, char **body)
 {
-	struct sockaddr_in sa = {.sin_family = AF_INET, .sin_port = htons(port)};
+	struct zsock_addrinfo hints = {
+		.ai_family = AF_INET,
+		.ai_socktype = SOCK_STREAM,
+		.ai_protocol = IPPROTO_TCP,
+	};
+	struct zsock_addrinfo *ai = NULL;
 	struct timeval tv = {
 		.tv_sec = CONFIG_SUPERVISOR_TIMEOUT_MS / 1000,
 		.tv_usec = (CONFIG_SUPERVISOR_TIMEOUT_MS % 1000) * 1000,
 	};
+	char service[6];
 	size_t used = 0;
 	ssize_t n = 0;
 	char *sep;
@@ -88,12 +94,17 @@ int http_request(const char *addr, uint16_t port, const char *method, const char
 	int len;
 	int ret;
 
-	if (zsock_inet_pton(AF_INET, addr, &sa.sin_addr) != 1) {
-		return -EINVAL;
+	/* getaddrinfo aceita nome ou IP literal; com IP não precisa do
+	 * resolver de DNS ligado. O mesmo `addr` vai no cabeçalho Host.
+	 */
+	snprintk(service, sizeof(service), "%u", port);
+	if (zsock_getaddrinfo(addr, service, &hints, &ai) != 0 || ai == NULL) {
+		return -EHOSTUNREACH;
 	}
 
 	sock = zsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (sock < 0) {
+		zsock_freeaddrinfo(ai);
 		return -errno;
 	}
 	zsock_setsockopt(sock, ZSOCK_SOL_SOCKET, ZSOCK_SO_RCVTIMEO, &tv, sizeof(tv));
@@ -104,7 +115,7 @@ int http_request(const char *addr, uint16_t port, const char *method, const char
 		       "Connection: close\r\n\r\n",
 		       method, path, addr, port);
 
-	if (zsock_connect(sock, (struct sockaddr *)&sa, sizeof(sa)) < 0 ||
+	if (zsock_connect(sock, ai->ai_addr, ai->ai_addrlen) < 0 ||
 	    zsock_send(sock, buf, len, 0) != len) {
 		ret = -errno;
 		goto out;
@@ -142,5 +153,6 @@ int http_request(const char *addr, uint16_t port, const char *method, const char
 
 out:
 	zsock_close(sock);
+	zsock_freeaddrinfo(ai);
 	return ret;
 }

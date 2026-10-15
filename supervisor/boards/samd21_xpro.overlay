@@ -1,32 +1,32 @@
 /*
- * SAM D21 Xplained Pro + OLED1 Xplained Pro no conector EXT3.
+ * SAM D21 Xplained Pro + OLED1 Xplained Pro no conector EXT1.
  *
- * Pinos do OLED1 -> EXT3 da SAMD21 Xpro (conferir no user guide do OLED1):
- *   3 BOTÃO 2  PA02        9 BOTÃO 1       PA28
- *   4 BOTÃO 3  PA03       10 DISPLAY_RESET PA27
- *   5 D/C      PB30       15 SPI SS        PB17
- *   6 LED 3    PA15       16 SPI MOSI      PB22 (SERCOM5 PAD2)
- *   7 LED 1    PA12       18 SPI SCK       PB23 (SERCOM5 PAD3)
- *   8 LED 2    PA13
+ * Pinos do OLED1 (tabela 1-2 do user guide dele) -> EXT1 da SAMD21 Xpro
+ * (tabela 4-1, página 11 do Atmel-42220B):
  *
- * No EXT3 o pino 5 (PB30) é o LED0 da placa e o pino 6 (PA15) é o SW0,
- * por isso os dois são removidos abaixo. Se o OLED1 for para outro
- * conector, só este arquivo muda.
+ *   EXT  sinal           SAMD21
+ *    3   BOTÃO 2         PB00
+ *    4   BOTÃO 3         PB01
+ *    5   D/C             PB06
+ *    6   LED 3           PB07
+ *    7   LED 1           PB02
+ *    8   LED 2           PB03
+ *    9   BOTÃO 1         PB04
+ *   10   DISPLAY_RESET   PB05
+ *   15   SPI SS          PA05
+ *   16   SPI MOSI        PA06   (SERCOM0 PAD2)
+ *   17   SPI MISO        PA04   (SERCOM0 PAD0)
+ *   18   SPI SCK         PA07   (SERCOM0 PAD3)
+ *
+ * Fica no EXT1, e não no EXT3, porque lá dois sinais não chegam ao MCU (notas
+ * 1 e 2 da tabela 4-3): o LED 2 (PA13) sai de fábrica ligado ao Serial Flash e
+ * desconectado do conector, e o BOTÃO 3 (PA03) depende do jumper JS300. No
+ * EXT1 nenhum pino é compartilhado.
  */
 
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 
-/delete-node/ &led0;
-/delete-node/ &pwm_led0;
-/delete-node/ &user_button;
-
 / {
-	aliases {
-		/delete-property/ led0;
-		/delete-property/ pwm-led0;
-		/delete-property/ sw0;
-	};
-
 	chosen {
 		zephyr,display = &oled1_display;
 	};
@@ -35,17 +35,17 @@
 		compatible = "gpio-leds";
 
 		led_gw: led_1 {
-			gpios = <&porta 12 GPIO_ACTIVE_LOW>;
+			gpios = <&portb 2 GPIO_ACTIVE_LOW>;
 			label = "OLED1 LED1 - gateway em falha";
 		};
 
 		led_srv: led_2 {
-			gpios = <&porta 13 GPIO_ACTIVE_LOW>;
+			gpios = <&portb 3 GPIO_ACTIVE_LOW>;
 			label = "OLED1 LED2 - servidor em falha";
 		};
 
 		led_hb: led_3 {
-			gpios = <&porta 15 GPIO_ACTIVE_LOW>;
+			gpios = <&portb 7 GPIO_ACTIVE_LOW>;
 			label = "OLED1 LED3 - heartbeat";
 		};
 	};
@@ -54,51 +54,63 @@
 		compatible = "gpio-keys";
 
 		button_1 {
-			gpios = <&porta 28 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			gpios = <&portb 4 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 			zephyr,code = <INPUT_KEY_1>;
 		};
 
 		button_2 {
-			gpios = <&porta 2 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			gpios = <&portb 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 			zephyr,code = <INPUT_KEY_2>;
 		};
 
 		button_3 {
-			gpios = <&porta 3 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			gpios = <&portb 1 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
 			zephyr,code = <INPUT_KEY_3>;
 		};
 	};
 };
 
-/* PB30 era o PWM do LED0; agora é o D/C do display */
-&tcc0 {
+/*
+ * O pinctrl padrão do SERCOM5 usa o PB02 como PAD0, e o PB02 é o pino 7 do
+ * EXT1, onde agora está o LED 1. Sem desligar o SERCOM5 o driver de SPI toma
+ * esse pino no init e o LED 1 nunca acende. Quem usa o EXT3 é a Ethernet, e o
+ * eth_ksz8851snl.overlay reabilita o SERCOM5 com os pinos certos do EXT3.
+ */
+&sercom5 {
 	status = "disabled";
 };
 
 &pinctrl {
-	sercom5_spi_ext3: sercom5_spi_ext3 {
+	sercom0_spi_ext1: sercom0_spi_ext1 {
 		group1 {
-			pinmux = <PB16C_SERCOM5_PAD0>,
-				 <PB22D_SERCOM5_PAD2>,
-				 <PB23D_SERCOM5_PAD3>;
+			pinmux = <PA4D_SERCOM0_PAD0>,
+				 <PA6D_SERCOM0_PAD2>,
+				 <PA7D_SERCOM0_PAD3>;
 		};
 	};
 };
 
-&sercom5 {
+/* Na placa o SERCOM0 vem declarado como UART; aqui vira o SPI do EXT1 */
+&sercom0 {
+	compatible = "atmel,sam0-spi";
+	/delete-property/ current-speed;
+	/delete-property/ rxpo;
+	/delete-property/ txpo;
 	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
 	/* MISO = PAD0, MOSI = PAD2, SCK = PAD3 */
 	dipo = <0>;
 	dopo = <1>;
-	pinctrl-0 = <&sercom5_spi_ext3>;
-	cs-gpios = <&portb 17 GPIO_ACTIVE_LOW>;
+	pinctrl-0 = <&sercom0_spi_ext1>;
+	cs-gpios = <&porta 5 GPIO_ACTIVE_LOW>;
 
 	oled1_display: ssd1306@0 {
 		compatible = "solomon,ssd1306";
 		reg = <0>;
 		spi-max-frequency = <4000000>;
-		data-cmd-gpios = <&portb 30 GPIO_ACTIVE_HIGH>;
-		reset-gpios = <&porta 27 GPIO_ACTIVE_LOW>;
+		data-cmd-gpios = <&portb 6 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&portb 5 GPIO_ACTIVE_LOW>;
 		width = <128>;
 		height = <32>;
 		segment-offset = <0>;

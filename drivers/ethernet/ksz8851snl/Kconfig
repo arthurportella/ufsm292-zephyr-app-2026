@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig ETH_KSZ8851SNL
+	bool "Microchip KSZ8851SNL (Ethernet1 Xplained Pro)"
+	default y
+	depends on DT_HAS_MICROCHIP_KSZ8851SNL_ENABLED
+	depends on NET_L2_ETHERNET
+	select SPI
+	select GPIO
+	help
+	  Driver out-of-tree para o controlador Ethernet SPI KSZ8851SNL, o chip
+	  da placa ATETHERNET1-XPRO. O Zephyr não traz driver para ele.
+
+if ETH_KSZ8851SNL
+
+config ETH_KSZ8851SNL_RX_THREAD_STACK_SIZE
+	int "Pilha da thread de recepção (bytes)"
+	default 800
+	help
+	  A thread só fala SPI e entrega net_pkt à pilha de rede. Conferir com
+	  CONFIG_THREAD_ANALYZER antes de reduzir.
+
+config ETH_KSZ8851SNL_RX_THREAD_PRIO
+	int "Prioridade (cooperativa) da thread de recepção"
+	default 2
+
+config ETH_KSZ8851SNL_TIMEOUT
+	int "Espera por um net_pkt de recepção (ms)"
+	default 100
+
+config ETH_KSZ8851SNL_TX_TIMEOUT
+	int "Espera por espaço na TX FIFO (ms)"
+	default 100
+
+config ETH_KSZ8851SNL_POLL_MS
+	int "Releitura periódica do ISR (ms)"
+	default 100
+	help
+	  A thread relê o ISR neste período mesmo sem borda no INTRN. O INTRN é
+	  ativo por nível e o GPIO do SAM0 só entrega borda, então sem isto uma
+	  interrupção que chegue durante o processamento se perderia.
+
+endif # ETH_KSZ8851SNL

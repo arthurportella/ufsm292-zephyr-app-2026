@@ -1,6 +1,6 @@
 # Supervisor (grupo D)
 
-SAM D21 Xplained Pro + OLED1 Xplained Pro + módulo Ethernet SPI.
+SAM D21 Xplained Pro + OLED1 Xplained Pro (**EXT1**) + Ethernet1 Xplained Pro (**EXT3**).
 
 A cada `CONFIG_SUPERVISOR_POLL_MS` (2 s): `GET /health` no gateway e no servidor,
 `GET /data` no servidor. Depois de N timeouts/erros consecutivos (N = 3), marca
@@ -31,17 +31,48 @@ LED 1 = gateway em falha, LED 2 = servidor em falha, LED 3 = pisca a cada ciclo.
 # só OLED1 (sem Ethernet): testa display, botões e LEDs; tudo fica em FALHA
 west build -b samd21_xpro supervisor
 
-# com Ethernet (exemplo W5500 no EXT1; trocar quando soubermos o módulo)
-west build -b samd21_xpro supervisor -- -DEXTRA_DTC_OVERLAY_FILE=eth_w5500.overlay
+# com a Ethernet1 Xplained Pro no EXT3
+west build -b samd21_xpro supervisor -- -DEXTRA_DTC_OVERLAY_FILE=eth_ksz8851snl.overlay
 
 west flash
 ```
 
-IPs e portas em [prj.conf](prj.conf) e IP da placa em
-[boards/samd21_xpro.conf](boards/samd21_xpro.conf). Com o simulador, gateway e
-servidor são o IP do PC, portas 5500 e 5501.
+O OLED1 vai no **EXT1** e a Ethernet1 no **EXT3**. Trocar os dois de conector
+não funciona sem reescrever os overlays: cada um usa um SERCOM diferente.
 
-Pinos do OLED1 (EXT3) em [boards/samd21_xpro.overlay](boards/samd21_xpro.overlay).
+### Por que o OLED1 fica no EXT1
+
+No EXT3 dois sinais do OLED1 não chegam ao microcontrolador (notas 1 e 2 da
+tabela 4-3, página 13 do [user guide da SAMD21 Xpro][ug]):
+
+| Sinal | Pino do EXT3 | Problema |
+|---|---|---|
+| LED 2 | 8 (PA13) | de fábrica vai ao chip select do Serial Flash e fica desconectado do conector; só um resistor de 0 Ω movido de R314 para R313 resolve |
+| BOTÃO 3 | 4 (PA03) | compartilhado com o USB ID; depende do jumper JS300 no J307 |
+
+No EXT1 nenhum dos dez pinos usados tem função compartilhada, então os três
+LEDs e os três botões funcionam sem mexer em nada na placa.
+
+A Ethernet não se incomoda com o EXT3: ela usa os pinos 5, 6, 9 e 15-18, e os
+únicos compartilhamentos ali são o LED0 (PB30) e o SW0 (PA15) da placa, tratados
+em [eth_ksz8851snl.overlay](eth_ksz8851snl.overlay). O chip select do Serial
+Flash (PA13), que divide o barramento SPI com ela, é mantido em nível alto por
+uma segunda entrada em `cs-gpios`.
+
+[ug]: https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-42220-SAMD21-Xplained-Pro_User-Guide.pdf
+
+IPs e portas do gateway e do servidor em [prj.conf](prj.conf). Com o simulador,
+os dois são o IP do PC, portas 5500 e 5501.
+
+A placa pega o **próprio endereço por DHCP** (`CONFIG_NET_DHCPV4=y` em
+[boards/samd21_xpro.conf](boards/samd21_xpro.conf)): é só plugar o cabo. As três
+strings `CONFIG_NET_CONFIG_MY_IPV4_*` estão vazias de propósito — com string
+vazia o `setup_ipv4()` do `net_config` não adiciona endereço nenhum e deixa
+endereço, máscara e gateway virem do lease. Para voltar ao IP fixo, basta
+preenchê-las.
+
+Pinos do OLED1 (EXT1) em [boards/samd21_xpro.overlay](boards/samd21_xpro.overlay)
+e os da Ethernet1 (EXT3) em [eth_ksz8851snl.overlay](eth_ksz8851snl.overlay).
 
 ## Testar sem placa
 
@@ -69,12 +100,53 @@ curl -X POST http://localhost:5500/reset                               # GW: "re
 curl -X POST "http://localhost:5501/_sim/fault?mode=close&seconds=10" # SRV: FALHA, reset, volta
 ```
 
-## Pendências
+## Driver da Ethernet
 
-- **Módulo Ethernet**: descobrir qual é. Zephyr tem driver para W5500, ENC28J60 e
-  ENC424J600. O ETHERNET1 Xplained Pro (KSZ8851SNL) **não tem driver** no Zephyr.
-- **Conector do OLED1**: o overlay assume EXT3 (pinos conferidos pelo esquema da
-  SAMD21 Xpro; conferir a pinagem do OLED1 no user guide dele).
-- **RAM**: 85% usada com W5500 (32 KB no total). Na placa, habilitar
-  `CONFIG_THREAD_ANALYZER=y` uma vez para conferir as pilhas.
-- **Contrato**: confirmar com os grupos B e C porta e formato do JSON reais.
+O KSZ8851SNL da Ethernet1 Xplained Pro **não tem driver no Zephyr**. O driver
+está neste repositório, em
+[drivers/ethernet/ksz8851snl](../drivers/ethernet/ksz8851snl/), com o binding
+em [dts/bindings/ethernet](../dts/bindings/ethernet/microchip,ksz8851snl.yaml).
+
+Ele é habilitado sozinho pelo overlay (`CONFIG_ETH_KSZ8851SNL` tem
+`default y` quando o nó existe no devicetree).
+
+Se o log trouxer `KSZ8851SNL não encontrado: CIDER = 0x....`:
+
+| Valor lido | Causa provável |
+|---|---|
+| `0x7088` | bytes invertidos: conferir `dipo`/`dopo` e o modo SPI |
+| `0x0000` ou `0xffff` | fiação, chip select ou alimentação |
+| outro | placa no conector errado |
+
+## Estado em 06/10/2026
+
+**Validado fim a fim na placa**, contra o simulador da pasta [sim/](../sim/)
+rodando no PC, com placa e PC na mesma rede: driver KSZ8851SNL, link, DHCP,
+TCP, HTTP, parsing do JSON, telas do OLED e o ciclo de reset. A recepção não
+descarta quadro (`rx_err`, `rx_reject` e `spi_err` zerados).
+
+Para repetir: `cd sim && docker compose up -d`, e trocar os endereços em
+[prj.conf](prj.conf) pelo IP do PC.
+
+**Ainda não exercitado:** os serviços reais em `45.182.14.16:5500/5501`, que é
+o que o `prj.conf` versionado aponta. As tentativas anteriores esbarraram em
+bloqueio de rede, não na placa — o `last_result` dava `-116` (`ETIMEDOUT`) ou
+`-104` (`ECONNRESET`), nunca `-118` (`EHOSTUNREACH`), que é o retorno quando o
+endereço não resolve.
+
+## Depuração
+
+Sem console, a inspeção é pelo depurador:
+
+```powershell
+pyocd gdbserver -t atsamd21j18a --persist --port 3333    # deixar rodando
+arm-none-eabi-gdb -batch -nx -x script.gdb build-eth/zephyr/zephyr.elf
+```
+
+Passar os comandos **por arquivo**, não por `-ex` (o PowerShell quebra os
+argumentos nas vírgulas), e não chamar funções do alvo pelo gdb: elas travam
+esperando mutex de outra thread.
+
+O driver mantém contadores em `eth_ksz8851_data_0.stats` (quadros vistos,
+entregues, descartados por cada motivo, erros de SPI) — é por onde se descobre
+onde um pacote se perde.

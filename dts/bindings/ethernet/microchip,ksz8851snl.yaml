@@ -1,0 +1,36 @@
+# Copyright (c) 2026 UFSM 292
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Controlador Ethernet 10/100 Microchip KSZ8851SNL em SPI, o chip da
+  ATETHERNET1-XPRO. Driver out-of-tree deste repositório.
+
+  Exemplo:
+
+    &sercom0 {
+        eth: ksz8851snl@0 {
+            compatible = "microchip,ksz8851snl";
+            reg = <0>;
+            spi-max-frequency = <8000000>;
+            int-gpios = <&portb 4 GPIO_ACTIVE_LOW>;
+            reset-gpios = <&portb 5 GPIO_ACTIVE_LOW>;
+            local-mac-address = [02 00 00 00 00 0d];
+        };
+    };
+
+compatible: "microchip,ksz8851snl"
+
+include: [spi-device.yaml, ethernet-controller.yaml]
+
+properties:
+  int-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      Pino INTRN do KSZ8851SNL (saída dreno aberto, ativa em nível baixo).
+      Declarar como GPIO_ACTIVE_LOW.
+
+  reset-gpios:
+    type: phandle-array
+    description: |
+      Pino RSTN. Opcional: sem ele o driver usa só o reset por software (GRR).

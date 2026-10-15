@@ -1,3 +1,8 @@
 build:
-  kconfig: drivers/blink/Kconfig
+  # Sem o Kconfig da raiz os símbolos dos drivers out-of-tree não existem, e
+  # sem dts_root os bindings deste repositório não são encontrados.
+  kconfig: Kconfig
   cmake: .
+  settings:
+    board_root: .
+    dts_root: .

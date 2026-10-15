@@ -122,6 +122,7 @@ static void poll_health(const char *name, struct monitor *m, const char *addr,
 	 * servidor sem gateway não é motivo para resetar o servidor.
 	 */
 	k_mutex_lock(&sup_lock, K_FOREVER);
+	m->last_result = status;
 	ev = monitor_update(m, ok, uptime, k_uptime_get());
 	if (ok && is_gateway) {
 		sup.nodes_online = h.nodes_online;

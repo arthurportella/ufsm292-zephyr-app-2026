@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: Apache-2.0
+
+rsource "ksz8851snl/Kconfig"

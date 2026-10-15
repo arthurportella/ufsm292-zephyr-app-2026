@@ -1,0 +1,86 @@
+/*
+ * Ethernet1 Xplained Pro (ATETHERNET1-XPRO, chip KSZ8851SNL) no EXT3 da
+ * SAM D21 Xplained Pro.
+ *
+ *   west build -b samd21_xpro supervisor -- -DEXTRA_DTC_OVERLAY_FILE=eth_ksz8851snl.overlay
+ *
+ * Pinos da Ethernet1 (tabela 1-4 do user guide dela) -> EXT3 da SAMD21 Xpro
+ * (tabela 4-3, páginas 12-13 do Atmel-42220B):
+ *
+ *   EXT  sinal      SAMD21   observação
+ *    5   PME        PB30     wake-on-LAN; é o LED0 da placa (ver abaixo)
+ *    6   nRST       PA15     é o SW0 da placa (ver abaixo)
+ *    9   INTRN      PA28     interrupção, ativa baixa, EXTINT[8]
+ *   15   SPI_SS_A   PB17     chip select
+ *   16   SPI_MOSI   PB22     SERCOM5 PAD2
+ *   17   SPI_MISO   PB16     SERCOM5 PAD0
+ *   18   SPI_SCK    PB23     SERCOM5 PAD3
+ *
+ * Cuidado: o nRST fica no pino 6, não no 10 como é comum em outros módulos
+ * SPI do padrão Xplained Pro. Nesta placa o pino 10 é NC.
+ *
+ * O nRST cai no PA15, que é o SW0 da placa e aterra o pino quando apertado.
+ * Não dá para omitir reset-gpios e confiar no pull-up do gpio-keys: ele
+ * inicializa em prioridade 90 e o driver de Ethernet em 60, então o nRST
+ * ficaria flutuando na leitura do Chip ID. O driver trata o pino como dreno
+ * aberto, e o user_button é removido para não disputar o PA15.
+ */
+
+&pinctrl {
+	sercom5_spi_ext3: sercom5_spi_ext3 {
+		group1 {
+			pinmux = <PB16C_SERCOM5_PAD0>,
+				 <PB22D_SERCOM5_PAD2>,
+				 <PB23D_SERCOM5_PAD3>;
+		};
+	};
+};
+
+/* O PB30 é o LED0 da placa e também o PME da Ethernet: remover o LED0 evita
+ * que algum código o acione contra essa saída.
+ */
+/delete-node/ &pwm_led0;
+/delete-node/ &led0;
+
+/* O PA15 passa a ser o nRST da Ethernet; ver a nota no cabeçalho */
+/delete-node/ &user_button;
+
+/ {
+	aliases {
+		/delete-property/ led0;
+		/delete-property/ pwm-led0;
+		/delete-property/ sw0;
+	};
+};
+
+&tcc0 {
+	status = "disabled";
+};
+
+/* O samd21_xpro.overlay desliga o SERCOM5 por causa do PB02; aqui ele volta */
+&sercom5 {
+	status = "okay";
+	/* MISO = PAD0, MOSI = PAD2, SCK = PAD3 */
+	dipo = <0>;
+	dopo = <1>;
+	pinctrl-0 = <&sercom5_spi_ext3>;
+
+	/*
+	 * PB17 é o chip select da Ethernet (reg = <0>). PA13 é o do Serial
+	 * Flash, que divide este barramento e não tem nó filho: está aqui só
+	 * para o spi_context_cs_configure_all() o deixar em nível alto no init,
+	 * em vez de flutuar e responder no meio das transferências.
+	 */
+	cs-gpios = <&portb 17 GPIO_ACTIVE_LOW>,
+		   <&porta 13 GPIO_ACTIVE_LOW>;
+
+	eth: ksz8851snl@0 {
+		compatible = "microchip,ksz8851snl";
+		reg = <0>;
+		/* O chip aceita até 40 MHz; 8 MHz é folgado para o SERCOM */
+		spi-max-frequency = <8000000>;
+		int-gpios = <&porta 28 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&porta 15 GPIO_ACTIVE_LOW>;
+		local-mac-address = [02 00 00 00 00 0d];
+	};
+};

@@ -1,6 +1,10 @@
-cmake_minimum_required(VERSION 3.20.0)
+# Ponto de entrada CMake do módulo (ver zephyr/module.yml), NÃO uma aplicação:
+# é o que põe drivers/ e lib/ no build. As aplicações ficam em app/, blinky/,
+# gateway/ e supervisor/.
 
-find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(ufsm292-zephyr-app-2026)
+zephyr_syscall_include_directories(include)
 
-target_sources(app PRIVATE src/main.c)
+zephyr_include_directories(include)
+
+add_subdirectory(drivers)
+add_subdirectory(lib)

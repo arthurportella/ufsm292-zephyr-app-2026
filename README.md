@@ -96,13 +96,21 @@ Once you have built the application, run the following command to flash it:
 west flash
 ```
 
-#### Gateway (SAM R21 Xplained Pro)
+#### Applications in this repository
 
-To build the gateway application for the SAM R21 Xplained Pro board:
+The repository root is the Zephyr *module* (drivers, libraries, bindings and
+boards). Each application lives in its own folder:
 
-```shell
-west build -b samr21_xpro gateway
-```
+| Folder | Board | Build |
+|---|---|---|
+| `app` | any | `west build -b $BOARD app` |
+| `blinky` | SAM D21 Xplained Pro | `west build -b samd21_xpro blinky` |
+| `gateway` | SAM R21 Xplained Pro | `west build -b samr21_xpro gateway` |
+| `supervisor` | SAM D21 Xplained Pro | see [supervisor/README.md](supervisor/README.md) |
+
+Do not put an application `CMakeLists.txt` at the repository root: that file is
+the module's CMake entry point (see `zephyr/module.yml`), and replacing it stops
+`drivers/` and `lib/` from being built into *any* application.
 
 ### Testing
 
